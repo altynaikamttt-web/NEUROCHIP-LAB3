@@ -22,6 +22,17 @@ PARTS=[
 P={x[0]:x for x in PARTS}
 QUESTIONS=[('Компьютердің «миы» қай құрылғы?','cpu'),('Қай құрылғы деректерді уақытша сақтайды?','ram'),('Қай құрылғы басқа бөлшектерді байланыстырады?','board'),('Файлдар компьютер өшсе де қайда сақталады?','ssd'),('Электр қуатын қай құрылғы жеткізеді?','psu')]
 
+DETAILS={
+ 'board':('Не үшін керек?', 'Аналық тақша — компьютердің негізгі үлкен платасы. Процессор, жедел жад, жинақтауыш және басқа құрылғылар осы тақшаға қосылады.', 'Қайда орналасады?', 'Жүйелік блок корпусының ішіндегі ең үлкен тікбұрышты тақша. Алдымен оны корпусқа бекітеді.', 'Есте сақта:', 'Аналық тақша — барлық құрылғыны біріктіретін ортақ жол.'),
+ 'cpu':('Не үшін керек?', 'Процессор (CPU) командаларды өңдейді, есептейді және бағдарламалардың орындалуын басқарады. Жылдам жұмыс істеуіне оның мүмкіндіктері әсер етеді.', 'Қайда орналасады?', 'Аналық тақшадағы арнайы процессор ұясына орнатылады. Әдетте оның үстіне салқындатқыш бекітіледі.', 'Есте сақта:', 'Процессор — есептеулерді орындайтын басқарушы құрылғы.'),
+ 'ram':('Не үшін керек?', 'Жедел жад (RAM) компьютер дәл қазір пайдаланып жатқан ақпаратты уақытша ұстайды. Компьютер өшкенде жедел жадтағы деректер сақталмайды.', 'Қайда орналасады?', 'Аналық тақшадағы ұзынша RAM слотына салынады. Оны SSD жинақтауышымен шатастырма.', 'Есте сақта:', 'RAM — уақытша жад, ал SSD — ұзақ мерзімді сақтау орны.'),
+ 'ssd':('Не үшін керек?', 'SSD — файлдарды, суреттерді, ойындар мен операциялық жүйені сақтайтын жинақтауыш. Компьютер сөнгеннен кейін де ақпарат сақталады.', 'Қайда орналасады?', 'Бұл виртуалды үлгіде SSD корпус ішіндегі төменгі сақтау орнына орнатылады. Нақты компьютерде SSD түріне қарай аналық тақшаға да орнатылуы мүмкін.', 'Есте сақта:', 'SSD — тұрақты сақтау құрылғысы.'),
+ 'psu':('Не үшін керек?', 'Қуат көзі (PSU) электр желісінен келетін қуатты компьютердің ішкі бөлшектеріне қажетті түрге айналдырып жеткізеді.', 'Қайда орналасады?', 'Жүйелік блоктың төменгі сол жақ бөлігіндегі арнайы орынға орнатылады.', 'Есте сақта:', 'Қуат көзі болмаса компьютер қосылмайды. Нақты электр құрылғыларын өз бетіңше ашпа.')
+}
+# Drawing coordinates use a 720×460 reference surface; scaled with canvas dimensions.
+ZONES={'board':(145,65,565,390),'cpu':(280,135,365,220),'ram':(395,125,455,275),'ssd':(485,315,605,380),'psu':(40,325,175,410)}
+ORDER=['board','cpu','ram','ssd','psu']
+
 def connect():
  c=sqlite3.connect(DB)
  c.execute('CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY, student TEXT NOT NULL, class_name TEXT NOT NULL, started TEXT NOT NULL, finished TEXT, score INTEGER DEFAULT 0, mistakes INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, explored INTEGER DEFAULT 0, assembled INTEGER DEFAULT 0, quiz_correct INTEGER DEFAULT 0, diagnosis_correct INTEGER DEFAULT 0, status TEXT DEFAULT "Орындалуда")')
@@ -32,7 +43,7 @@ class App:
  def __init__(self,root):
   self.root=root;root.title('NEURO•CHIP LAB 3 — Оқушы зертханасы және мұғалім панелі');root.geometry('1220x800');root.minsize(940,630);root.configure(bg=BG)
   self.name=tk.StringVar();self.class_name=tk.StringVar(value='3-сынып');self.sound=tk.BooleanVar(value=False)
-  self.session=None;self.score=0;self.mistakes=0;self.attempts=0;self.explored=set();self.placed=set();self.quiz_done=set();self.diagnose_done=set();self.selected=None;self.mode='student';self.page='login';self.photo=None;self.speech_token=0
+  self.session=None;self.score=0;self.mistakes=0;self.attempts=0;self.explored=set();self.placed=set();self.credited=set();self.quiz_done=set();self.diagnose_done=set();self.selected=None;self.drag_key=None;self.mode='student';self.page='login';self.photo=None;self.speech_token=0
   self.shell();self.login()
  def label(self,p,t,size=12,bold=False,color=NAVY,**kw):return tk.Label(p,text=t,font=('Segoe UI',size,'bold' if bold else 'normal'),bg=p.cget('bg'),fg=color,**kw)
  def btn(self,p,t,fn,primary=False):return tk.Button(p,text=t,command=fn,font=('Segoe UI',11,'bold'),bg=BLUE if primary else WHITE,fg=WHITE if primary else NAVY,activebackground='#CDE1FC',relief='solid',bd=1,highlightthickness=0,cursor='hand2',padx=12,pady=9)
@@ -61,7 +72,7 @@ class App:
  def start(self):
   name=self.name.get().strip();cls=self.class_name.get().strip()
   if not name or not cls:messagebox.showwarning('Толтыру қажет','Оқушының аты-жөні мен сыныбын енгізіңіз.');return
-  self.score=self.mistakes=self.attempts=0;self.explored=set();self.placed=set();self.quiz_done=set();self.diagnose_done=set();self.selected=None;self.refresh_score();self.mode='student'
+  self.score=self.mistakes=self.attempts=0;self.explored=set();self.placed=set();self.credited=set();self.quiz_done=set();self.diagnose_done=set();self.selected=None;self.refresh_score();self.mode='student'
   with connect() as c:
    cur=c.execute('INSERT INTO sessions(student,class_name,started) VALUES(?,?,?)',(name,cls,datetime.now().isoformat(timespec='seconds')));self.session=cur.lastrowid
   self.show('explore')
@@ -105,62 +116,150 @@ class App:
    if isinstance(w,tk.Button) and w.cget('text').startswith('🔊 Дыбыс'):w.config(text='🔊 Дыбыс: қосулы' if self.sound.get() else '🔊 Дыбыс: өшірулі')
   self.footer.config(text='Дыбыстау қосылды. Қазақша Windows дауысы қажет.' if self.sound.get() else 'Дыбыстау өшірілді.')
  def page_explore(self):
-  self.heading('🔬 Құрылғыларды зерттеу','Құрылғының атауын бас. Оң жақтан анықтамасын оқы. «Тыңдау» батырмасын басып тыңда.')
-  shell=self.panel();shell.pack(fill='both',expand=True,padx=15,pady=6)
-  left=tk.Frame(shell,bg=WHITE);left.pack(side='left',fill='both',expand=True)
-  right=tk.Frame(shell,bg=WHITE,width=350);right.pack(side='right',fill='y',padx=(15,0));right.pack_propagate(False)
-  self.label(left,'Құрылғыны таңда:',14,True).pack(anchor='w',pady=7)
-  for key,name,description,_ in PARTS:self.btn(left,name,lambda k=key:self.select_part(k)).pack(fill='x',pady=5)
-  self.label(left,'Әр құрылғыны таңдаған сайын оның қызметін білесің.',11,color='#536783',wraplength=460,justify='left').pack(anchor='w',pady=14)
-  self.info_title=self.label(right,'Бөлшекті таңда',17,True,BLUE,wraplength=320,justify='left');self.info_title.pack(anchor='w',pady=10)
-  self.info_text=self.label(right,'Сол жақтағы бес құрылғының біреуін бас.',13,wraplength=315,justify='left');self.info_text.pack(anchor='w',pady=13)
-  self.btn(right,'🔊 Анықтаманы тыңдау',lambda:self.speak(P[self.selected][1]+'. '+P[self.selected][2]) if self.selected else messagebox.showinfo('Таңдау','Алдымен құрылғыны таңдаңыз.'),True).pack(fill='x',pady=10)
-  self.progress=self.label(right,f'Зерттелген құрылғылар: {len(self.explored)}/5',12,True,GREEN);self.progress.pack(anchor='w',pady=10)
-  self.btn(right,'Келесі: құрастыру →',lambda:self.show('assemble'),True).pack(fill='x',pady=12)
+  self.heading('🔬 Құрылғыларды зерттеу','1. Құрылғыны таңда. 2. Оның қызметін және орналасуын оқы. 3. Құрастыруға өт.')
+  shell=self.panel();shell.pack(fill='both',expand=True,padx=12,pady=4)
+  left=tk.Frame(shell,bg=WHITE,width=265);left.pack(side='left',fill='y',padx=(0,12));left.pack_propagate(False)
+  middle=tk.Frame(shell,bg=WHITE);middle.pack(side='left',fill='both',expand=True)
+  right=tk.Frame(shell,bg=WHITE,width=335);right.pack(side='right',fill='y',padx=(12,0));right.pack_propagate(False)
+  self.label(left,'5 құрылғыны зертте',14,True,BLUE).pack(anchor='w',pady=(0,8))
+  for key,name,_,_ in PARTS:self.btn(left,name,lambda k=key:self.select_part(k)).pack(fill='x',pady=5)
+  self.progress=self.label(left,f'Зерттелді: {len(self.explored)}/5',12,True,GREEN);self.progress.pack(anchor='w',pady=12)
+  self.btn(left,'Құрастыруға өт →',lambda:self.show('assemble'),True).pack(fill='x',pady=8)
+  self.label(middle,'ЖҮЙЕЛІК БЛОКТЫҢ СЫЗБАСЫ',12,True,BLUE).pack(anchor='w')
+  self.explore_canvas=tk.Canvas(middle,bg='#EAF2FF',highlightthickness=0,height=460,cursor='hand2')
+  self.explore_canvas.pack(fill='both',expand=True,pady=8)
+  self.explore_canvas.bind('<Configure>',lambda e:self.draw_case(self.explore_canvas,explore=True))
+  self.explore_canvas.bind('<Button-1>',self.explore_click)
+  self.info_title=self.label(right,'Құрылғыны таңда',17,True,BLUE,wraplength=320,justify='left');self.info_title.pack(anchor='w',pady=(2,9))
+  self.info_text=self.label(right,'Сол жақтағы атауды немесе суреттегі бөлшекті бас.',12,wraplength=310,justify='left');self.info_text.pack(anchor='w',pady=5)
+  self.btn(right,'🔊 Анықтаманы тыңдау',lambda:self.speak(P[self.selected][1]+'. '+DETAILS[self.selected][1]+'. '+DETAILS[self.selected][3]) if self.selected else messagebox.showinfo('Таңдау','Алдымен құрылғыны таңдаңыз.'),True).pack(fill='x',pady=10)
+  self.select_part('board')
  def select_part(self,key):
-  self.selected=key;self.explored.add(key);self.info_title.config(text=P[key][1]);self.info_text.config(text=P[key][2]);self.progress.config(text=f'Зерттелген құрылғылар: {len(self.explored)}/5')
+  self.selected=key;self.explored.add(key)
+  self.info_title.config(text=P[key][1]);d=DETAILS[key]
+  self.info_text.config(text=f'{d[0]}\n{d[1]}\n\n{d[2]}\n{d[3]}\n\n{d[4]}\n{d[5]}')
+  self.progress.config(text=f'Зерттелді: {len(self.explored)}/5')
   with connect() as c:c.execute('UPDATE sessions SET explored=? WHERE id=?',(len(self.explored),self.session))
-  self.speak(P[key][1]+'. '+P[key][2])
+  self.draw_case(self.explore_canvas,explore=True)
+  self.speak(P[key][1]+'. '+d[1])
+ def canvas_xy(self,canvas,event):
+  return (event.x*720/max(canvas.winfo_width(),1),event.y*460/max(canvas.winfo_height(),1))
+ def target_at(self,x,y):
+  # Smaller overlapping parts must be hit before motherboard.
+  for k in ['cpu','ram','ssd','psu','board']:
+   a,b,c,d=ZONES[k]
+   if a<=x<=c and b<=y<=d:return k
+  return None
+ def explore_click(self,event):
+  x,y=self.canvas_xy(self.explore_canvas,event);key=self.target_at(x,y)
+  if key:self.select_part(key)
+ def draw_case(self,canvas,explore=False):
+  canvas.delete('all')
+  w=max(canvas.winfo_width(),1);h=max(canvas.winfo_height(),1)
+  sx=w/720;sy=h/460
+  def rect(x1,y1,x2,y2,**kw):return canvas.create_rectangle(x1*sx,y1*sy,x2*sx,y2*sy,**kw)
+  def oval(x1,y1,x2,y2,**kw):return canvas.create_oval(x1*sx,y1*sy,x2*sx,y2*sy,**kw)
+  def txt(x,y,text,size=12,**kw):return canvas.create_text(x*sx,y*sy,text=text,font=('Segoe UI',max(8,int(size*min(sx,sy))),'bold'),**kw)
+  rect(12,12,710,447,fill='#152944',outline='#557EA8',width=4)
+  rect(24,24,695,434,fill='#223B59',outline='#A4C5E8',width=2)
+  for x in (655,677):
+   for y in (65,95,125,155,185,215,245,275,305,335,365):rect(x,y,x+9,y+12,fill='#46647D',outline='')
+  # Motherboard is physically the first item to install.
+  board_on=explore or 'board' in self.placed
+  rect(145,65,565,390,fill='#116257' if board_on else '#315271',outline='#79D9CA' if board_on else '#8EB1D3',width=3,dash=() if board_on else (6,5))
+  if board_on:
+   for i in range(4):rect(160+i*16,80,169+i*16,115,fill='#39BBA7',outline='')
+   for i in range(5):rect(170+i*62,355,205+i*62,368,fill='#214A3F',outline='#5CC9B5')
+  txt(352,96,'АНАЛЫҚ ТАҚША',14,fill='#E4FFF6' if board_on else '#D7E9FF')
+  for k in ['cpu','ram','ssd','psu']:
+   x1,y1,x2,y2=ZONES[k];on=explore or k in self.placed
+   if k=='cpu':color='#E7AC4A';label='CPU\nПроцессор'
+   elif k=='ram':color='#9B83F4';label='RAM\nЖедел жад'
+   elif k=='ssd':color='#5DBCE7';label='SSD'
+   else:color='#DA8399';label='PSU\nҚуат көзі'
+   rect(x1,y1,x2,y2,fill=color if on else '#203B57',outline='#FFFFFF' if on else '#9CC4EB',width=2,dash=() if on else (5,4))
+   if on:
+    if k=='cpu':
+     for t in range(4):rect(x1+9+t*18,y1+8,x1+15+t*18,y1+15,fill='#FBE9BA',outline='')
+    if k=='ram':
+     for t in range(4):rect(x1+10,y1+12+t*32,x2-10,y1+31+t*32,fill='#473C8C',outline='')
+    if k=='psu':oval(x1+32,y1+12,x1+96,y1+76,fill='#A94E65',outline='#FBE2EA',width=2)
+   txt((x1+x2)/2,(y1+y2)/2,label,12,fill='#112C46' if on else '#E3EFFF',justify='center')
+  if not explore and self.selected and self.selected not in self.placed:
+   txt(355,418,'Таңдалды: '+P[self.selected][1]+' → орнын бас',11,fill='#FFE09C')
+  elif not explore:txt(355,418,'Бөлшекті таңда да, белгіленген орнын бас',11,fill='#FFE09C')
+  if explore and self.selected:
+   x1,y1,x2,y2=ZONES[self.selected];rect(x1,y1,x2,y2,fill='',outline='#FFF279',width=5)
  def page_assemble(self):
-  self.heading('🧩 Компьютерді құрастыру','1. Сол жақтан бөлшекті бас. 2. Оң жақтан дәл сондай ұяшықты бас. 3. Қате таңдасаң, қайта көр.')
-  area=self.panel();area.pack(fill='both',expand=True,padx=15,pady=6)
-  left=tk.Frame(area,bg=WHITE);left.pack(side='left',fill='both',expand=True,padx=(0,15))
-  right=tk.Frame(area,bg=WHITE);right.pack(side='right',fill='both',expand=True)
-  self.label(left,'1. БӨЛШЕКТЕР СӨРЕСІ',15,True,BLUE).pack(anchor='w',pady=6)
+  self.heading('🧩 ЖҮЙЕЛІК БЛОКТЫ ҚҰРАСТЫР','Бөлшекті таңда да, жүйелік блоктағы дұрыс орнына бас. Алдымен аналық тақшаны орналастыр!')
+  area=self.panel();area.pack(fill='both',expand=True,padx=12,pady=4)
+  left=tk.Frame(area,bg=WHITE,width=270);left.pack(side='left',fill='y',padx=(0,12));left.pack_propagate(False)
+  right=tk.Frame(area,bg=WHITE);right.pack(side='left',fill='both',expand=True)
+  self.label(left,'1. БӨЛШЕКТІ ТАҢДА',13,True,BLUE).pack(anchor='w',pady=5)
+  self.label(left,'Батырманы бас немесе суретке сүйре.',10,color='#4A607C',wraplength=240,justify='left').pack(anchor='w',pady=4)
   self.shelf={}
   for key,name,_,_ in PARTS:
-   b=self.btn(left,name,lambda k=key:self.choose_part(k));b.pack(fill='x',pady=6);self.shelf[key]=b
-  self.label(right,'2. ЖҮЙЕЛІК БЛОК ҰЯШЫҚТАРЫ',15,True,BLUE).pack(anchor='w',pady=6)
-  self.slots={}
-  for key,name,_,_ in PARTS:
-   b=self.btn(right,'□ '+name,lambda k=key:self.place(k));b.pack(fill='x',pady=6);self.slots[key]=b
-  bottom=tk.Frame(self.body,bg=BG);bottom.pack(fill='x',padx=20,pady=8)
-  self.assembly_feedback=self.label(bottom,f'Орнатылған: {len(self.placed)}/5. Бөлшекті таңда.',12,True,BLUE,wraplength=720,justify='left');self.assembly_feedback.pack(side='left',fill='x',expand=True)
+   b=self.btn(left,name,lambda k=key:self.choose_part(k));b.pack(fill='x',pady=6)
+   b.bind('<ButtonPress-1>',lambda e,k=key:self.drag_begin(e,k),add='+')
+   b.bind('<ButtonRelease-1>',lambda e,k=key:self.drag_end(e,k),add='+')
+   self.shelf[key]=b
+  self.label(left,'ОРНАТУ РЕТІ',12,True,BLUE).pack(anchor='w',pady=(12,4))
+  self.label(left,'1. Аналық тақша\n2. Процессор\n3. Жедел жад\n4. SSD жинақтауыш\n5. Қуат көзі',11,wraplength=245,justify='left').pack(anchor='w')
+  self.label(right,'2. БӨЛШЕКТІҢ ОРНЫН БАС',13,True,BLUE).pack(anchor='w',pady=5)
+  self.case_canvas=tk.Canvas(right,bg='#EAF2FF',highlightthickness=0,cursor='hand2')
+  self.case_canvas.pack(fill='both',expand=True,pady=5)
+  self.case_canvas.bind('<Configure>',lambda e:self.draw_case(self.case_canvas))
+  self.case_canvas.bind('<Button-1>',self.case_click)
+  bottom=tk.Frame(self.body,bg=BG);bottom.pack(fill='x',padx=15,pady=5)
+  self.assembly_feedback=self.label(bottom,f'Орнатылған: {len(self.placed)}/5. Аналық тақшаны таңда.',11,True,BLUE,wraplength=650,justify='left');self.assembly_feedback.pack(side='left',fill='x',expand=True)
   self.btn(bottom,'Қайта бастау',self.reset_assembly).pack(side='right',padx=4)
   self.btn(bottom,'Тексеру',self.check_assembly,True).pack(side='right',padx=4)
-  for key in self.placed:self.shelf[key].config(text='✓ '+P[key][1],state='disabled',bg='#E3F7EB');self.slots[key].config(text='✓ '+P[key][1],state='disabled',bg='#E3F7EB')
+  for key in self.placed:self.shelf[key].config(text='✓ '+P[key][1],state='disabled',bg='#E3F7EB')
+  self.draw_case(self.case_canvas)
+ def drag_begin(self,event,key):
+  self.drag_key=key
+ def drag_end(self,event,key):
+  # Drop is detected using screen coordinates, not widget-local coordinates.
+  if self.drag_key!=key:return
+  self.drag_key=None
+  if key in self.placed:return
+  x=event.x_root-self.case_canvas.winfo_rootx();y=event.y_root-self.case_canvas.winfo_rooty()
+  if 0<=x<self.case_canvas.winfo_width() and 0<=y<self.case_canvas.winfo_height():
+   self.selected=key;self.place(self.target_at(x*720/max(self.case_canvas.winfo_width(),1),y*460/max(self.case_canvas.winfo_height(),1)))
  def choose_part(self,key):
   if key in self.placed:return
   self.selected=key
   for k,b in self.shelf.items():
    if k not in self.placed:b.config(bg='#C9E0FF' if k==key else WHITE)
-  self.assembly_feedback.config(text=f'Таңдалды: {P[key][1]}. Енді оң жақтағы сәйкес ұяшықты бас.',fg=BLUE)
+  self.assembly_feedback.config(text=f'Таңдалды: {P[key][1]}. Енді суреттегі дұрыс орнын бас.',fg=BLUE)
+  self.draw_case(self.case_canvas)
+ def case_click(self,event):
+  x,y=self.canvas_xy(self.case_canvas,event);self.place(self.target_at(x,y))
  def place(self,slot):
-  if slot in self.placed:return
-  if not self.selected or self.selected in self.placed:self.assembly_feedback.config(text='Алдымен сол жақтағы бөлшекті таңда!',fg=RED);return
-  key=self.selected;ok=key==slot;self.record('Құрастыру',P[slot][1],P[key][1],ok,20)
+  if not self.selected or self.selected in self.placed:
+   self.assembly_feedback.config(text='Алдымен сол жақтан бөлшекті таңда!',fg=RED);return
+  key=self.selected
+  if slot is None:
+   self.assembly_feedback.config(text='Жүйелік блоктағы белгіленген ұяшықты бас.',fg=RED);return
+  if slot in self.placed:
+   self.assembly_feedback.config(text='Бұл орын толтырылған. Басқа орынды таңда.',fg=RED);return
+  ok=key==slot and (key=='board' or 'board' in self.placed)
+  self.record('Құрастыру',P[slot][1],P[key][1],ok,20 if key not in self.credited else 0)
   if ok:
-   self.placed.add(key);self.shelf[key].config(text='✓ '+P[key][1],state='disabled',bg='#E3F7EB');self.slots[key].config(text='✓ '+P[key][1],state='disabled',bg='#E3F7EB');self.selected=None
-   self.assembly_feedback.config(text=f'Дұрыс! +20 ұпай. Орнатылған: {len(self.placed)}/5',fg=GREEN)
-   if len(self.placed)==5:self.assembly_feedback.config(text='Тамаша! Бес құрылғы орнатылды. «Тексеру» батырмасын бас.',fg=GREEN)
-  else:self.assembly_feedback.config(text=f'Қате! {P[key][1]} құрылғысын өз ұяшығына орналастыр. Қате саны +1.',fg=RED)
+   self.placed.add(key);new_points=key not in self.credited;self.credited.add(key);self.shelf[key].config(text='✓ '+P[key][1],state='disabled',bg='#E3F7EB');self.selected=None
+   self.assembly_feedback.config(text=f'Дұрыс! {P[key][1]} орнатылды. '+('+20 ұпай. ' if new_points else 'Ұпай бұрын есептелген. ')+f'Барлығы: {len(self.placed)}/5',fg=GREEN)
+   if len(self.placed)==5:self.assembly_feedback.config(text='Тамаша! Компьютердің барлық 5 бөлшегі орнатылды. «Тексеру» батырмасын бас.',fg=GREEN)
+  else:
+   hint='Алдымен аналық тақшаны орнат.' if key!='board' and 'board' not in self.placed else 'Бөлшектің атауын және ұяшығын салыстыр.'
+   self.assembly_feedback.config(text=f'Қате! {hint} Қате саны +1.',fg=RED)
+  self.draw_case(self.case_canvas)
  def reset_assembly(self):
-  if messagebox.askyesno('Қайта бастау','Орнатылған бөлшектерді қайтадан жинайсыз ба? (Алынған ұпайлар сақталады.)'):
+  if messagebox.askyesno('Қайта бастау','Бөлшектерді қайтадан жинайсыз ба? (Алынған ұпайлар мен қателер сақталады.)'):
    self.placed=set();self.selected=None
    with connect() as c:c.execute('UPDATE sessions SET assembled=0 WHERE id=?',(self.session,))
    self.show('assemble')
  def check_assembly(self):
-  if len(self.placed)==5:messagebox.showinfo('Дұрыс!','Компьютер дұрыс құрастырылды! 5/5. Келесі бөлімге өтіңіз.');self.show('diagnose')
+  if len(self.placed)==5:messagebox.showinfo('Дұрыс!','Компьютер дұрыс құрастырылды! 5/5. Келесі бөлімге өт.');self.show('diagnose')
   else:messagebox.showinfo('Әлі аяқталмады',f'{len(self.placed)}/5 орнатылды. Қалған {5-len(self.placed)} құрылғыны орнына қой.')
  def page_diagnose(self):self.question_page('diagnose')
  def page_quiz(self):self.question_page('quiz')
